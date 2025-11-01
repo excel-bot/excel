@@ -170,14 +170,14 @@ async def set_kill(ctx, name: str, kill_time_str: str = None):
             "boss": name.capitalize(),
             "type": boss_type,
             "killed_at": kill_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-            "next_spawn": next_spawn.strftime("%Y-%m-%d %H:%M:%S"),
+            "next_spawn": next_spawn.strftime("%Y-%m-%d %H:%M:%S") if next_spawn else None,
             "days_hours": days_hours,
             "announced": False
         }
         await ctx.send(
             f"📅 **{name.capitalize()}** follows fixed schedule: "
             f"{', '.join(days_hours.keys()).title()} ({', '.join(days_hours.values())})\n"
-            f"Next spawn: `{next_spawn.strftime('%A %H:%M')}`"
+            f"Next spawn: `{next_spawn.strftime('%A %H:%M') if next_spawn else 'Not set'}`"
         )
     else:
         await ctx.send(f"⚠️ Unknown boss `{name}`. Please add it first in BOSS_RESPAWN or FIXED_SCHEDULE.")
@@ -197,7 +197,7 @@ async def boss_schedule(ctx):
             data[name] = {
                 "boss": name.capitalize(),
                 "type": "fixed",
-                "next_spawn": next_spawn.strftime("%Y-%m-%d %H:%M:%S"),
+                "next_spawn": next_spawn.strftime("%Y-%m-%d %H:%M:%S") if next_spawn else None,
                 "days_hours": info["days_hours"],
                 "announced": False
             }
@@ -279,11 +279,19 @@ async def check_respawns():
                 for channel in guild_channels:
                     await channel.send(f"⚔️ @here **{info['boss']}** has respawned!")
                 info["announced"] = True
-                updated = True
+                
+                # ✅ If fixed schedule, compute next weekly spawn
+                if info["type"] == "fixed":
+                    next_spawn = get_next_fixed_spawn(info["days_hours"])
+                    info["next_spawn"] = next_spawn.strftime("%Y-%m-%d %H:%M:%S") if next_spawn else None
+                    info["announced"] = False
+                    info["warned"] = False
 
+                updated = True
         if updated:
             save_data(data, guild_id=guild.id)
 
 
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
+
