@@ -71,17 +71,32 @@ def get_data_file(ctx=None, guild_id=None):
         gid = guild_id
     return f"boss_data_{gid}.json"
 
-def load_data(ctx=None, guild_id=None):
-    file = get_data_file(ctx, guild_id)
-    if os.path.exists(file):
-        with open(file, "r") as f:
-            return json.load(f)
-    return {}
+def load_data(ctx):
+    guild_id = ctx.guild.id
+    filename = f"boss_data_{guild_id}.json"
 
-def save_data(data, ctx=None, guild_id=None):
-    file = get_data_file(ctx, guild_id)
-    with open(file, "w") as f:
-        json.dump(data, f, indent=4)
+    if not os.path.exists(filename):
+        return {}
+
+    try:
+        with open(filename, "r") as f:
+            data = f.read().strip()
+            if not data:
+                return {}
+            return json.loads(data)
+    except:
+        return {}  # Prevent crash if file damaged
+
+
+def save_data(ctx, data):
+    guild_id = ctx.guild.id
+    filename = f"boss_data_{guild_id}.json"
+
+    try:
+        with open(filename, "w") as f:
+            json.dump(data, f, indent=4)
+    except Exception as e:
+        print(f"Failed to save JSON file: {e}")
 
 # ------------------------- FIXED SCHEDULE CALC -------------------------
 def get_next_fixed_spawn(days_hours):
@@ -298,5 +313,6 @@ async def check_respawns():
 
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
+
 
 
