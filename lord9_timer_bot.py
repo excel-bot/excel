@@ -125,9 +125,10 @@ COMMAND_CHANNEL_IDS = [
 ]
 @bot.command(name="setkill")
 async def set_kill(ctx, name: str, kill_time_str: str = None):
+    """Set boss kill time manually (HH:MM). Adds default respawn hours"""
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
         return  # ignore commands from other channels
-    """Set boss kill time manually (HH:MM). Adds default respawn hours"""
+
     data = load_data(ctx)
     name = name.lower()
     now = datetime.now(PH_TZ)
@@ -149,40 +150,43 @@ async def set_kill(ctx, name: str, kill_time_str: str = None):
     if name in BOSS_RESPAWN:
         respawn_hours = BOSS_RESPAWN[name]
         respawn_datetime = kill_datetime + timedelta(hours=respawn_hours)
-        boss_type = "normal"
         data[name] = {
             "boss": name.capitalize(),
-            "type": boss_type,
+            "type": "normal",
             "killed_at": kill_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "respawn_at": respawn_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "respawn_hours": respawn_hours,
-            "announced": False
+            "announced": False,
+            "warned": False
         }
         await ctx.send(
             f"🩸 **{name.capitalize()}** killed at `{kill_datetime.strftime('%H:%M')}`.\n"
             f"Will respawn at `{respawn_datetime.strftime('%H:%M')}` (+{respawn_hours}h)."
         )
+
     elif name in FIXED_SCHEDULE:
         days_hours = FIXED_SCHEDULE[name]["days_hours"]
         next_spawn = get_next_fixed_spawn(days_hours)
-        boss_type = "fixed"
         data[name] = {
             "boss": name.capitalize(),
-            "type": boss_type,
+            "type": "fixed",
             "killed_at": kill_datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "next_spawn": next_spawn.strftime("%Y-%m-%d %H:%M:%S") if next_spawn else None,
             "days_hours": days_hours,
-            "announced": False
+            "announced": False,
+            "warned": False
         }
         await ctx.send(
             f"📅 **{name.capitalize()}** follows fixed schedule: "
             f"{', '.join(days_hours.keys()).title()} ({', '.join(days_hours.values())})\n"
             f"Next spawn: `{next_spawn.strftime('%A %H:%M') if next_spawn else 'Not set'}`"
         )
+
     else:
-        await ctx.send(f"⚠️ Unknown boss `{name}`. Please add it first in BOSS_RESPAWN or FIXED_SCHEDULE.")
+        await ctx.send(f"⚠️ Unknown boss `{name}`.")
 
     save_data(data, ctx)
+
 
 @bot.command(name="schedule")
 async def boss_schedule(ctx):
@@ -294,4 +298,5 @@ async def check_respawns():
 
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
+
 
