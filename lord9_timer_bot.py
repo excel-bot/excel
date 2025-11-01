@@ -64,14 +64,23 @@ FIXED_SCHEDULE = {
 ALERT_CHANNEL_ID = None  # Replace with your channel ID if needed
 
 # ------------------------- FILE STORAGE -------------------------
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
+def get_data_file(ctx=None, guild_id=None):
+    if ctx:
+        gid = ctx.guild.id
+    else:
+        gid = guild_id
+    return f"boss_data_{gid}.json"
+
+def load_data(ctx=None, guild_id=None):
+    file = get_data_file(ctx, guild_id)
+    if os.path.exists(file):
+        with open(file, "r") as f:
             return json.load(f)
     return {}
 
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
+def save_data(data, ctx=None, guild_id=None):
+    file = get_data_file(ctx, guild_id)
+    with open(file, "w") as f:
         json.dump(data, f, indent=4)
 
 # ------------------------- FIXED SCHEDULE CALC -------------------------
@@ -119,7 +128,7 @@ async def set_kill(ctx, name: str, kill_time_str: str = None):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
         return  # ignore commands from other channels
     """Set boss kill time manually (HH:MM). Adds default respawn hours"""
-    data = load_data()
+    data = load_data(ctx)
     name = name.lower()
     now = datetime.now(PH_TZ)
 
@@ -173,13 +182,13 @@ async def set_kill(ctx, name: str, kill_time_str: str = None):
     else:
         await ctx.send(f"⚠️ Unknown boss `{name}`. Please add it first in BOSS_RESPAWN or FIXED_SCHEDULE.")
 
-    save_data(data)
+    save_data(data, ctx)
 
 @bot.command(name="schedule")
 async def boss_schedule(ctx):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
         return
-    data = load_data()
+    data = load_data(ctx)
     now = datetime.now(PH_TZ)
 
     for name, info in FIXED_SCHEDULE.items():
@@ -238,41 +247,43 @@ async def boss_schedule(ctx):
 # ------------------------- AUTO SPAWN CHECK -------------------------
 @tasks.loop(seconds=10)
 async def check_respawns():
-    channels = [bot.get_channel(cid) for cid in COMMAND_CHANNEL_IDS]
-    channels = [ch for ch in channels if ch]
-    if not channels:
-        return
 
-    data = load_data()
-    now = datetime.now(PH_TZ)
-    updated = False
+    for guild in bot.guilds:
+        data = load_data(guild_id=guild.id)
+        now = datetime.now(PH_TZ)
+        updated = False
 
-    for name, info in data.items():
-        if info["type"] == "normal":
-            respawn_time = PH_TZ.localize(datetime.strptime(info["respawn_at"], "%Y-%m-%d %H:%M:%S"))
-        else:
-            respawn_time = PH_TZ.localize(datetime.strptime(info["next_spawn"], "%Y-%m-%d %H:%M:%S"))
+        # Find channel for this guild only
+        guild_channels = [ch for ch in guild.channels if ch.id in COMMAND_CHANNEL_IDS]
 
-        remaining_seconds = (respawn_time - now).total_seconds()
+        if not guild_channels:
+            continue
 
-        if 0 < remaining_seconds <= 600 and not info.get("warned"):
-            for channel in channels:
-                await channel.send(f"⏰ @here **{info['boss']}** respawning in 10 minutes!")
-            info["warned"] = True
-            updated = True
+        for name, info in data.items():
+            if info["type"] == "normal":
+                respawn_time = PH_TZ.localize(datetime.strptime(info["respawn_at"], "%Y-%m-%d %H:%M:%S"))
+            else:
+                respawn_time = PH_TZ.localize(datetime.strptime(info["next_spawn"], "%Y-%m-%d %H:%M:%S"))
 
-        elif remaining_seconds <= 0 and not info.get("announced"):
-            for channel in channels:
-                await channel.send(f"⚔️ @here **{info['boss']}** has respawned!")
-            info["announced"] = True
-            updated = True
+            remaining_seconds = (respawn_time - now).total_seconds()
 
-    if updated:
-        save_data(data)
+            # 10 min warning
+            if 0 < remaining_seconds <= 600 and not info.get("warned"):
+                for channel in guild_channels:
+                    await channel.send(f"⏰ @here **{info['boss']}** respawning in 10 minutes!")
+                info["warned"] = True
+                updated = True
+
+            # Respawned message
+            elif remaining_seconds <= 0 and not info.get("announced"):
+                for channel in guild_channels:
+                    await channel.send(f"⚔️ @here **{info['boss']}** has respawned!")
+                info["announced"] = True
+                updated = True
+
+        if updated:
+            save_data(data, guild_id=guild.id)
 
 
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
-
-
-
