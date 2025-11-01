@@ -177,12 +177,11 @@ async def set_kill(ctx, name: str, kill_time_str: str = None):
 
 @bot.command(name="schedule")
 async def boss_schedule(ctx):
-    if ctx.channel.id != COMMAND_CHANNEL_ID:
+    if ctx.channel.id not in COMMAND_CHANNEL_IDS:
         return
     data = load_data()
     now = datetime.now(PH_TZ)
 
-    # Merge fixed schedule bosses if not yet in data
     for name, info in FIXED_SCHEDULE.items():
         if name not in data:
             next_spawn = get_next_fixed_spawn(info["days_hours"])
@@ -194,29 +193,24 @@ async def boss_schedule(ctx):
                 "announced": False
             }
 
-    # Build a list of (spawn_datetime, boss_info)
     boss_list = []
     for name, info in data.items():
         if info["type"] == "normal":
             respawn_time = PH_TZ.localize(datetime.strptime(info["respawn_at"], "%Y-%m-%d %H:%M:%S"))
-        else:  # fixed
+        else:
             respawn_time = PH_TZ.localize(datetime.strptime(info["next_spawn"], "%Y-%m-%d %H:%M:%S"))
         boss_list.append((respawn_time, info))
 
     if not boss_list:
         await ctx.send("No boss records found.")
-        return
+        return  # ✅ FIXED
 
-    # Sort by spawn datetime
     boss_list.sort(key=lambda x: x[0])
 
-    # Separate by today / tomorrow
     today = now.date()
     tomorrow = today + timedelta(days=1)
 
     output = []
-
-    # Helper to format day header
     def format_day_header(dt):
         day_name = dt.strftime("%A")
         date_str = dt.strftime("%d/%m")
@@ -226,27 +220,27 @@ async def boss_schedule(ctx):
             return f"**NEXT DAY ({day_name}, {date_str})**"
 
     day_bosses = {today: [], tomorrow: []}
-
     for spawn_time, info in boss_list:
-        if spawn_time.date() == today or spawn_time.date() == tomorrow:
+        if spawn_time.date() in [today, tomorrow]:
             remaining = get_time_remaining(spawn_time)
             time_str = spawn_time.strftime("%I:%M %p").lstrip("0")
             day_bosses[spawn_time.date()].append(f"**{time_str}** | **{info['boss'].upper()}** ({remaining})")
 
-    # Format output
     for day in [today, tomorrow]:
         if day_bosses[day]:
             output.append(format_day_header(datetime.combine(day, time())))
             output.extend(day_bosses[day])
-            output.append("")  # empty line
+            output.append("")
 
     await ctx.send("\n".join(output))
+
 
 # ------------------------- AUTO SPAWN CHECK -------------------------
 @tasks.loop(seconds=10)
 async def check_respawns():
-    channel = bot.get_channel(COMMAND_CHANNEL_ID)
-    if not channel:
+    channels = [bot.get_channel(cid) for cid in COMMAND_CHANNEL_IDS]
+    channels = [ch for ch in channels if ch]
+    if not channels:
         return
 
     data = load_data()
@@ -261,22 +255,24 @@ async def check_respawns():
 
         remaining_seconds = (respawn_time - now).total_seconds()
 
-        # 10-minute warning
         if 0 < remaining_seconds <= 600 and not info.get("warned"):
-            await channel.send(f"⏰ @here**{info['boss']}** respawning in 10 minutes!")
+            for channel in channels:
+                await channel.send(f"⏰ @here **{info['boss']}** respawning in 10 minutes!")
             info["warned"] = True
             updated = True
 
-        # Boss respawned
         elif remaining_seconds <= 0 and not info.get("announced"):
-            await channel.send(f"⚔️ @here**{info['boss']}** has respawned!")
+            for channel in channels:
+                await channel.send(f"⚔️ @here **{info['boss']}** has respawned!")
             info["announced"] = True
             updated = True
 
     if updated:
         save_data(data)
 
+
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
+
 
 
