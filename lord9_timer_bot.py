@@ -110,10 +110,13 @@ async def on_ready():
     check_respawns.start()
 
 # ------------------------- COMMANDS -------------------------
-COMMAND_CHANNEL_ID = 1429295248592601108
+COMMAND_CHANNEL_IDS = [
+    1429295248592601108,
+    1434140498314006548,
+]
 @bot.command(name="setkill")
 async def set_kill(ctx, name: str, kill_time_str: str = None):
-    if ctx.channel.id != COMMAND_CHANNEL_ID:
+    if ctx.channel.id not in COMMAND_CHANNEL_IDS:
         return  # ignore commands from other channels
     """Set boss kill time manually (HH:MM). Adds default respawn hours"""
     data = load_data()
@@ -275,4 +278,5 @@ async def check_respawns():
 
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
+
 
