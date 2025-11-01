@@ -5,6 +5,8 @@ import os
 from datetime import datetime, timedelta, time
 import pytz
 from dotenv import load_dotenv
+from keep_alive import keep_alive
+keep_alive()
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -268,27 +270,8 @@ async def check_respawns():
             info["announced"] = True
             updated = True
 
-    from flask import Flask
-from threading import Thread
-
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "Bot is alive!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-    
     if updated:
         save_data(data)
-
-keep_alive()
 
 # ------------------------- RUN BOT -------------------------
 bot.run(TOKEN)
