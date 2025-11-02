@@ -1,0 +1,219 @@
+{
+    "viorent": {
+        "type": "normal",
+        "respawn": "2025-11-03 04:37:14",
+        "warn": false,
+        "announce": false
+    },
+    "venatus": {
+        "type": "normal",
+        "respawn": "2025-11-03 04:37:05",
+        "warn": false,
+        "announce": false
+    },
+    "ego": {
+        "type": "normal",
+        "respawn": "2025-11-03 15:37:16",
+        "warn": false,
+        "announce": false
+    },
+    "livera": {
+        "type": "normal",
+        "respawn": "2025-11-03 18:37:26",
+        "warn": false,
+        "announce": false
+    },
+    "araneo": {
+        "type": "normal",
+        "respawn": "2025-11-03 18:37:28",
+        "warn": false,
+        "announce": false
+    },
+    "undomiel": {
+        "type": "normal",
+        "respawn": "2025-11-03 18:37:31",
+        "warn": false,
+        "announce": false
+    },
+    "ladydalia": {
+        "type": "normal",
+        "respawn": "2025-11-03 12:37:36",
+        "warn": false,
+        "announce": false
+    },
+    "general": {
+        "type": "normal",
+        "respawn": "2025-11-03 23:37:41",
+        "warn": false,
+        "announce": false
+    },
+    "amentis": {
+        "type": "normal",
+        "respawn": "2025-11-03 23:37:44",
+        "warn": false,
+        "announce": false
+    },
+    "baron": {
+        "type": "normal",
+        "respawn": "2025-11-04 02:37:50",
+        "warn": false,
+        "announce": false
+    },
+    "wannitas": {
+        "type": "normal",
+        "respawn": "2025-11-04 18:37:52",
+        "warn": false,
+        "announce": false
+    },
+    "metus": {
+        "type": "normal",
+        "respawn": "2025-11-04 18:37:54",
+        "warn": false,
+        "announce": false
+    },
+    "duplican": {
+        "type": "normal",
+        "respawn": "2025-11-04 18:37:58",
+        "warn": false,
+        "announce": false
+    },
+    "shuliar": {
+        "type": "normal",
+        "respawn": "2025-11-04 05:38:00",
+        "warn": false,
+        "announce": false
+    },
+    "gareth": {
+        "type": "normal",
+        "respawn": "2025-11-04 02:38:03",
+        "warn": false,
+        "announce": false
+    },
+    "titore": {
+        "type": "normal",
+        "respawn": "2025-11-04 07:38:07",
+        "warn": false,
+        "announce": false
+    },
+    "larba": {
+        "type": "normal",
+        "respawn": "2025-11-04 05:38:09",
+        "warn": false,
+        "announce": false
+    },
+    "catena": {
+        "type": "normal",
+        "respawn": "2025-11-04 05:38:11",
+        "warn": false,
+        "announce": false
+    },
+    "secreta": {
+        "type": "normal",
+        "respawn": "2025-11-05 08:38:14",
+        "warn": false,
+        "announce": false
+    },
+    "ordo": {
+        "type": "normal",
+        "respawn": "2025-11-05 08:38:19",
+        "warn": false,
+        "announce": false
+    },
+    "asta": {
+        "type": "normal",
+        "respawn": "2025-11-05 08:38:22",
+        "warn": false,
+        "announce": false
+    },
+    "supore": {
+        "type": "normal",
+        "respawn": "2025-11-05 08:38:25",
+        "warn": false,
+        "announce": false
+    },
+    "clemantis": {
+        "type": "fixed",
+        "next": "2025-11-03 11:30:00",
+        "days": {
+            "monday": "11:30",
+            "thursday": "19:00"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "saphirus": {
+        "type": "fixed",
+        "next": "2025-11-04 11:30:00",
+        "days": {
+            "sunday": "17:00",
+            "tuesday": "11:30"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "thymele": {
+        "type": "fixed",
+        "next": "2025-11-03 19:00:00",
+        "days": {
+            "monday": "19:00",
+            "wednesday": "11:30"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "milavy": {
+        "type": "fixed",
+        "next": "2025-11-08 15:00:00",
+        "days": {
+            "saturday": "15:00"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "ringor": {
+        "type": "fixed",
+        "next": "2025-11-08 17:00:00",
+        "days": {
+            "saturday": "17:00"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "roderick": {
+        "type": "fixed",
+        "next": "2025-11-07 19:00:00",
+        "days": {
+            "friday": "19:00"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "auraq": {
+        "type": "fixed",
+        "next": "2025-11-05 21:00:00",
+        "days": {
+            "friday": "22:00",
+            "wednesday": "21:00"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "chaiflock": {
+        "type": "fixed",
+        "next": "2025-11-08 22:00:00",
+        "days": {
+            "saturday": "22:00"
+        },
+        "warn": false,
+        "announce": false
+    },
+    "benji": {
+        "type": "fixed",
+        "next": "2025-11-02 21:00:00",
+        "days": {
+            "sunday": "21:00"
+        },
+        "warn": false,
+        "announce": false
+    }
+}
