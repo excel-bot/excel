@@ -4,6 +4,9 @@ import json, os
 from datetime import datetime, timedelta, time
 import pytz
 from dotenv import load_dotenv
+from keep_alive import keep_alive
+
+keep_alive()
 
 # ================= CONFIG =================
 load_dotenv()
@@ -223,3 +226,4 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
