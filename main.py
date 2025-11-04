@@ -157,33 +157,27 @@ async def schedule(ctx):
 
     events.sort(key=lambda x: x[0])
 
+    # Display TODAY and TOMORROW section
     today = now.date()
     tomorrow = today + timedelta(days=1)
 
-    today_list = []
-    tomorrow_list = []
+    msg = "**BOSS SCHEDULE**\n\n"
 
-    for t, b in events:
-        ts_full, _ = discord_time(t)
+    def build_section(day, label):
+        section = f"**{label}**\n"
+        any_found = False
+        for t, b in events:
+            if t.date() == day:
+                ts = int(t.timestamp())
+                section += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
+                any_found = True
+        return section + "\n" if any_found else ""
 
-        if t <= now:
-            line = f"**{b.upper()}** | {ts_full} ✅ Spawned"
-        else:
-            line = f"**{b.upper()}** | {ts_full}"
-
-        if t.date() == today:
-            today_list.append(line)
-        elif t.date() == tomorrow:
-            tomorrow_list.append(line)
-
-    msg = f"**📅 BOSS SCHEDULE**\n\n"
-    msg += f"**TODAY ({today.strftime('%A, %m/%d')})**\n"
-    msg += "\n".join(today_list) if today_list else "_No bosses today_"
-
-    msg += f"\n\n**TOMORROW ({tomorrow.strftime('%A, %m/%d')})**\n"
-    msg += "\n".join(tomorrow_list) if tomorrow_list else "_No bosses tomorrow_"
+    msg += build_section(today, "TODAY")
+    msg += build_section(tomorrow, "TOMORROW")
 
     await ctx.send(msg)
+
 
 # ================= AUTO CHECK =================
 @tasks.loop(seconds=10)
@@ -192,39 +186,54 @@ async def check():
 
     for g in bot.guilds:
         data = load_data(g.id)
-        changed=False
+        changed = False
 
-        channels=[c for c in g.channels if c.id in COMMAND_CHANNEL_IDS]
-        if not channels: continue
+        channels = [c for c in g.channels if c.id in COMMAND_CHANNEL_IDS]
+        if not channels:
+            continue
 
-        for b,i in list(data.items()):
-            if i["type"]=="normal":
-                t = PH_TZ.localize(datetime.strptime(i["respawn"],"%Y-%m-%d %H:%M:%S"))
+        for b, i in list(data.items()):
+            if i["type"] == "normal":
+                t = PH_TZ.localize(datetime.strptime(i["respawn"], "%Y-%m-%d %H:%M:%S"))
             else:
-                t = PH_TZ.localize(datetime.strptime(i["next"],"%Y-%m-%d %H:%M:%S"))
+                t = PH_TZ.localize(datetime.strptime(i["next"], "%Y-%m-%d %H:%M:%S"))
 
-            sec = (t-now).total_seconds()
+            sec = (t - now).total_seconds()
 
-            if 0 < sec <= 600 and not i["warn"]:
+            # 10 minute warning window (600s ± 30s)
+            if 570 <= sec <= 630 and not i["warn"]:
                 ts_full, ts_rel = discord_time(t)
                 for c in channels:
                     await c.send(
-                        f"⏰ @here **{b.upper()}** will spawn in **10 mins!**\nRespawn: {ts_full} (**{ts_rel}**)")
+                        f"⏰ @here **{b.upper()}** will spawn in **10 minutes!**\n"
+                        f"Spawn Time: {ts_full} (**{ts_rel}**)"
+                    )
                 i["warn"] = True
                 changed = True
 
-            if sec<=0 and not i["announce"]:
-                for c in channels: await c.send(f"⚔️@here **{b.upper()} SPAWNED!**")
-                i["announce"]=True; changed=True
+            # Spawn announcement
+            if sec <= 0 and not i["announce"]:
+                # Allow only up to 2 minutes late announcement
+                if sec >= -120:
+                    for c in channels:
+                        await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
+                # else: too late, no announcement
 
-                if i["type"]=="fixed":
+                i["announce"] = True
+                changed = True
+
+                # Next spawn scheduling for fixed bosses
+                if i["type"] == "fixed":
                     nxt = next_fixed_spawn(i["days"])
-                    i["next"]=nxt.strftime("%Y-%m-%d %H:%M:%S")
-                    i["warn"]=False; i["announce"]=False
+                    i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
+                    i["warn"] = False
+                    i["announce"] = False
 
-        if changed: save_data(g.id,data)
+        if changed:
+            save_data(g.id, data)
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
