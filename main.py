@@ -91,7 +91,7 @@ def remaining(t):
 def discord_time(ts):
     """Convert dt to Discord timestamp formats"""
     unix = int(ts.timestamp())
-    return f"<t:{unix}:F>", f"<t:{unix}:R>"
+    return f"<t:{unix}:t>", f"<t:{unix}:R>"
 
 # ================= EVENTS =================
 @bot.event
@@ -226,4 +226,5 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
