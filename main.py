@@ -157,27 +157,26 @@ async def schedule(ctx):
 
     events.sort(key=lambda x: x[0])
 
-    # Display TODAY and TOMORROW section
     today = now.date()
     tomorrow = today + timedelta(days=1)
 
-    msg = "**BOSS SCHEDULE**\n\n"
+    msg = "**📅 BOSS SCHEDULE**\n\n"
 
-    def build_section(day, label):
-        section = f"**{label}**\n"
-        any_found = False
+    def section(day, label):
+        txt = f"**{label}**\n"
+        found = False
         for t, b in events:
             if t.date() == day:
                 ts = int(t.timestamp())
-                section += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
-                any_found = True
-        return section + "\n" if any_found else ""
+                txt += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
+                found = True
+        return txt + "\n" if found else ""
 
-    msg += build_section(today, "TODAY")
-    msg += build_section(tomorrow, "TOMORROW")
+    msg += section(today, "TODAY")
+    msg += section(tomorrow, "TOMORROW")
 
     await ctx.send(msg)
-
+    
 
 # ================= AUTO CHECK =================
 @tasks.loop(seconds=10)
@@ -234,6 +233,7 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
