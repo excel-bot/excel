@@ -46,7 +46,7 @@ FIXED_SCHEDULE = {
 }
 
 # allowed channels
-COMMAND_CHANNEL_IDS = [1429295248592601108, 1434140498314006548]
+COMMAND_CHANNEL_IDS = [1429295248592601108, 1434140498314006548, 1453753393217667196]
 
 # ================= STORAGE =================
 def file_path(gid):
@@ -233,6 +233,7 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
