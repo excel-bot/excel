@@ -188,11 +188,10 @@ async def check():
     now = datetime.now(PH_TZ)
 
     for g in bot.guilds:
-        channels = [c for c in g.channels if c.id in COMMAND_CHANNEL_IDS]
-        if not channels:
-            continue
+        for c in g.channels:
+            if c.id no in COMMAND_CHANNEL_IDS:
+                continue
 
-        for c in channels:
             data = load_data(g.id, c.id)
             changed = False
 
@@ -207,10 +206,9 @@ async def check():
                 # 10 minute warning window (600s ± 30s)
                 if 570 <= sec <= 630 and not i["warn"]:
                     ts_full, ts_rel = discord_time(t)
-                    for ch in channels:
-                        await ch.send(
-                            f"⏰ @here **{b.upper()}** will spawn in **10 minutes!**\n"
-                            f"Spawn Time: {ts_full} (**{ts_rel}**)"
+                    await c.send(
+                        f"⏰ @here **{b.upper()}** will spawn in **10 minutes!**\n"
+                        f"Spawn Time: {ts_full} (**{ts_rel}**)"
                     )
                     i["warn"] = True
                     changed = True
@@ -243,6 +241,7 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
