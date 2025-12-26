@@ -188,8 +188,8 @@ async def check():
     now = datetime.now(PH_TZ)
 
     for g in bot.guilds:
-        for c in g.channels:
-            if c.id no in COMMAND_CHANNEL_IDS:
+        for c in g.text_channels:
+            if c.id not in COMMAND_CHANNEL_IDS:
                 continue
 
             data = load_data(g.id, c.id)
@@ -203,7 +203,7 @@ async def check():
 
                 sec = (t - now).total_seconds()
 
-                # 10 minute warning window (600s ± 30s)
+                # 🔔 10-minute warning
                 if 570 <= sec <= 630 and not i["warn"]:
                     ts_full, ts_rel = discord_time(t)
                     await c.send(
@@ -213,22 +213,19 @@ async def check():
                     i["warn"] = True
                     changed = True
 
-                # reset flags if spawn still far away
+                # reset flags if still far
                 if sec > 630:
                     i["warn"] = False
                     i["announce"] = False
 
-                # Spawn announcement
+                # ⚔️ Spawn
                 if sec <= 0 and not i["announce"]:
-                # Allow only up to 2 minutes late announcement
                     if sec >= -120:
                         await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
-                    # else: too late, no announcement
 
                     i["announce"] = True
                     changed = True
 
-                # Next spawn scheduling for fixed bosses
                     if i["type"] == "fixed":
                         nxt = next_fixed_spawn(i["days"])
                         i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
@@ -240,6 +237,7 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
