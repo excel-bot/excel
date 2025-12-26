@@ -49,11 +49,11 @@ FIXED_SCHEDULE = {
 COMMAND_CHANNEL_IDS = [1429295248592601108, 1434140498314006548, 1453753393217667196]
 
 # ================= STORAGE =================
-def file_path(gid):
-    return f"{DATA_FOLDER}/boss_data_{gid}.json"
+def file_path(gid, cid):
+    return f"{DATA_FOLDER}/boss_data_{gid}_{cid}.json"
 
-def load_data(guild_id):
-    f = file_path(guild_id)
+def load_data(guild_id, channel_id):
+    f = file_path(guild_id, channel_id)
     if not os.path.exists(f):
         return {}
     try:
@@ -63,8 +63,8 @@ def load_data(guild_id):
     except:
         return {}
 
-def save_data(guild_id, data):
-    f = file_path(guild_id)
+def save_data(guild_id, channel_id, data):
+    f = file_path(guild_id, channel_id)
     with open(f,"w") as x:
         json.dump(data,x,indent=4)
 
@@ -104,7 +104,7 @@ async def on_ready():
 async def setkill(ctx, boss:str, time_str:str=None):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS: return
     boss = boss.lower()
-    data = load_data(ctx.guild.id)
+    data = load_data(ctx.guild.id, ctx.channel.id)
     now = datetime.now(PH_TZ)
 
     # manual input time
@@ -119,16 +119,20 @@ async def setkill(ctx, boss:str, time_str:str=None):
         k = now
 
     if boss in BOSS_RESPAWN:
+        if boss in data:
+            del data[boss]
         hrs = BOSS_RESPAWN[boss]
         r = k + timedelta(hours=hrs)
         data[boss] = {"type":"normal","respawn":r.strftime("%Y-%m-%d %H:%M:%S"),"warn":False,"announce":False}
-        save_data(ctx.guild.id,data)
+        save_data(ctx.guild.id, ctx.channel.id, data)
         return await ctx.send(f"🩸 **{boss.upper()}** respawn `{r.strftime('%I:%M %p')}`")
 
     if boss in FIXED_SCHEDULE:
+        if boss in data:
+            del data[boss]
         nxt = next_fixed_spawn(FIXED_SCHEDULE[boss])
         data[boss] = {"type":"fixed","next":nxt.strftime("%Y-%m-%d %H:%M:%S"),"days":FIXED_SCHEDULE[boss],"warn":False,"announce":False}
-        save_data(ctx.guild.id,data)
+        save_data(ctx.guild.id, ctx.channel.id, data)
         return await ctx.send(f"📅 **{boss.upper()}** next `{nxt.strftime('%A %I:%M %p')}`")
 
     await ctx.send("❌ Unknown boss")
@@ -138,7 +142,7 @@ async def schedule(ctx):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
         return
 
-    data = load_data(ctx.guild.id)
+    data = load_data(ctx.guild.id, ctx.channel.id)
     now = datetime.now(PH_TZ)
 
     events = []
@@ -184,55 +188,62 @@ async def check():
     now = datetime.now(PH_TZ)
 
     for g in bot.guilds:
-        data = load_data(g.id)
-        changed = False
-
         channels = [c for c in g.channels if c.id in COMMAND_CHANNEL_IDS]
         if not channels:
             continue
 
-        for b, i in list(data.items()):
-            if i["type"] == "normal":
-                t = PH_TZ.localize(datetime.strptime(i["respawn"], "%Y-%m-%d %H:%M:%S"))
-            else:
-                t = PH_TZ.localize(datetime.strptime(i["next"], "%Y-%m-%d %H:%M:%S"))
+        for c in channels:
+            data = load_data(g.id, c.id)
+            changed = False
 
-            sec = (t - now).total_seconds()
+            for b, i in list(data.items()):
+                if i["type"] == "normal":
+                    t = PH_TZ.localize(datetime.strptime(i["respawn"], "%Y-%m-%d %H:%M:%S"))
+                else:
+                    t = PH_TZ.localize(datetime.strptime(i["next"], "%Y-%m-%d %H:%M:%S"))
 
-            # 10 minute warning window (600s ± 30s)
-            if 570 <= sec <= 630 and not i["warn"]:
-                ts_full, ts_rel = discord_time(t)
-                for c in channels:
-                    await c.send(
-                        f"⏰ @here **{b.upper()}** will spawn in **10 minutes!**\n"
-                        f"Spawn Time: {ts_full} (**{ts_rel}**)"
+                sec = (t - now).total_seconds()
+
+                # 10 minute warning window (600s ± 30s)
+                if 570 <= sec <= 630 and not i["warn"]:
+                    ts_full, ts_rel = discord_time(t)
+                    for ch in channels:
+                        await ch.send(
+                            f"⏰ @here **{b.upper()}** will spawn in **10 minutes!**\n"
+                            f"Spawn Time: {ts_full} (**{ts_rel}**)"
                     )
-                i["warn"] = True
-                changed = True
+                    i["warn"] = True
+                    changed = True
 
-            # Spawn announcement
-            if sec <= 0 and not i["announce"]:
-                # Allow only up to 2 minutes late announcement
-                if sec >= -120:
-                    for c in channels:
-                        await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
-                # else: too late, no announcement
-
-                i["announce"] = True
-                changed = True
-
-                # Next spawn scheduling for fixed bosses
-                if i["type"] == "fixed":
-                    nxt = next_fixed_spawn(i["days"])
-                    i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
+                # reset flags if spawn still far away
+                if sec > 630:
                     i["warn"] = False
                     i["announce"] = False
 
-        if changed:
-            save_data(g.id, data)
+                # Spawn announcement
+                if sec <= 0 and not i["announce"]:
+                # Allow only up to 2 minutes late announcement
+                    if sec >= -120:
+                        for ch in channels:
+                            await ch.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
+                    # else: too late, no announcement
+
+                    i["announce"] = True
+                    changed = True
+
+                # Next spawn scheduling for fixed bosses
+                    if i["type"] == "fixed":
+                        nxt = next_fixed_spawn(i["days"])
+                        i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
+                        i["warn"] = False
+                        i["announce"] = False
+
+            if changed:
+                save_data(g.id, c.id, data)
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
