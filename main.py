@@ -222,8 +222,7 @@ async def check():
                 if sec <= 0 and not i["announce"]:
                 # Allow only up to 2 minutes late announcement
                     if sec >= -120:
-                        for ch in channels:
-                            await ch.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
+                        await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
                     # else: too late, no announcement
 
                     i["announce"] = True
@@ -241,6 +240,7 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
