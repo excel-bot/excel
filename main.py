@@ -131,7 +131,7 @@ async def setkill(ctx, boss:str, time_str:str=None):
         if boss in data:
             del data[boss]
         nxt = next_fixed_spawn(FIXED_SCHEDULE[boss])
-        data[boss] = {"type":"fixed","next":nxt.strftime("%Y-%m-%d %H:%M:%S"),"days":FIXED_SCHEDULE[boss],"warn":False,"announce":False}
+        data[boss] = {"type":"fixed","next":nxt.strftime("%Y-%m-%d %H:%M:%S"),"days":FIXED_SCHEDULE[boss],"warn":False,"announce":False,"locked":False}
         save_data(ctx.guild.id, ctx.channel.id, data)
         return await ctx.send(f"📅 **{boss.upper()}** next `{nxt.strftime('%A %I:%M %p')}`")
 
@@ -216,27 +216,37 @@ async def check():
                 # reset flags if still far
                 if sec > 630:
                     i["warn"] = False
-                    i["announce"] = False
+                    if i["type"] == "normal":
+                        i["announce"] = False
 
                 # ⚔️ Spawn
-                if sec <= 0 and not i["announce"]:
+                if sec <= 0 and not i["announce"] and not i.get("locked", False):
                     if sec >= -120:
                         await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
 
                     i["announce"] = True
+                    i["locked"] = True
                     changed = True
 
                     if i["type"] == "fixed":
                         nxt = next_fixed_spawn(i["days"])
-                        i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
-                        i["warn"] = False
-                        i["announce"] = False
+                        if nxt:
+                            i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
+                            i["warn"] = False
+                            i["announce"] = False
+                        else:
+                            print(f"[WARN] No next spawn found for {b}")
+
+                 if i.get("locked", False) and sec > 3600:
+                    i["locked"] = False
+                    changed = True
 
             if changed:
                 save_data(g.id, c.id, data)
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
 
