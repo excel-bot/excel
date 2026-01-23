@@ -220,43 +220,45 @@ async def week(ctx):
     now = datetime.now(PH_TZ)
 
     events = []
-
     for b, i in data.items():
         try:
-            key = "respawn" if i["type"] == "normal" else "next"
-            t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
-            events.append((t, b))
+            if i["type"] == "normal":
+                t = PH_TZ.localize(datetime.strptime(i["respawn"], "%Y-%m-%d %H:%M:%S"))
+            else:
+                t = PH_TZ.localize(datetime.strptime(i["next"], "%Y-%m-%d %H:%M:%S"))
+
+            # Only future spawns
+            if t >= now:
+                events.append((t, b))
         except:
             continue
 
     if not events:
-        return await ctx.send("⚠️ Walay record. Use `!setkill` first.")
+        return await ctx.send("⚠️ Walay upcoming spawns.")
 
     events.sort(key=lambda x: x[0])
 
-    start = now - timedelta(days=now.weekday())
-    days = [start + timedelta(days=i) for i in range(7)]
+    msg = "**📅 BOSS SCHEDULE (Next 7 Days)**\n\n"
 
-    msg = "**📅 WEEKLY BOSS SCHEDULE**\n\n"
+    # 🔥 Rolling 7 Days from today
+    days = [(now + timedelta(days=i)).date() for i in range(7)]
 
     for day in days:
         label = day.strftime("%A").upper()
-        msg += f"**{label}**\n"
-
         found = False
+
+        section = f"**{label}**\n"
+
         for t, b in events:
-            if t.date() == day.date():
+            if t.date() == day:
                 ts = int(t.timestamp())
-                msg += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
+                section += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
                 found = True
 
-        if not found:
-            msg += "—\n"
-
-        msg += "\n"
+        if found:
+            msg += section + "\n"
 
     await ctx.send(msg)
-
 # ================= AUTO CHECK =================
 @tasks.loop(seconds=10)
 async def check():
@@ -320,4 +322,5 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
