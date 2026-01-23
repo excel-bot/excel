@@ -44,7 +44,8 @@ FIXED_SCHEDULE = {
     "roderick": {"friday": "19:00"},
     "auraq": {"friday": "22:00", "wednesday": "21:00"},
     "chaiflock": {"saturday": "22:00"},
-    "benji": {"sunday": "21:00"}
+    "benji": {"sunday": "21:00"},
+    "tumier": {"sunday": "19:00"}
 }
 
 COMMAND_CHANNEL_IDS = [
@@ -319,3 +320,4 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
