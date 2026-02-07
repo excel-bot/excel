@@ -200,7 +200,7 @@ async def schedule(ctx):
         for t, b in events:
             if t.date() == day:
                 ts = int(t.timestamp())
-                output += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
+                output += f"📌 <t:{ts}:t> | **{b.upper()}**
                 found = True
 
         return output + "\n" if found else ""
@@ -252,7 +252,7 @@ async def week(ctx):
         for t, b in events:
             if t.date() == day:
                 ts = int(t.timestamp())
-                section += f"📌 <t:{ts}:t> | **{b.upper()}** <t:{ts}:R>\n"
+                section += f"📌 <t:{ts}:t> | **{b.upper()}**
                 found = True
 
         if found:
@@ -322,5 +322,6 @@ async def check():
 
 # ================= RUN =================
 bot.run(TOKEN)
+
 
 
