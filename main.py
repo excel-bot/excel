@@ -64,22 +64,19 @@ def load_data(guild_id, channel_id):
         return {}
     try:
         with open(f, "r") as x:
-            t = x.read().strip()
-            return json.loads(t) if t else {}
+            return json.load(x)
     except:
         return {}
 
 def save_data(guild_id, channel_id, data):
-    f = file_path(guild_id, channel_id)
-    with open(f, "w") as x:
+    with open(file_path(guild_id, channel_id), "w") as x:
         json.dump(data, x, indent=4)
 
 # ================= TIME HELPERS =================
 def next_fixed_spawn(schedule):
     now = datetime.now(PH_TZ)
 
-    # range(8) fix to avoid same-day skip bug
-    for i in range(8):
+    for i in range(8):  # 8 to avoid same-day bug
         day = now + timedelta(days=i)
         d = day.strftime("%A").lower()
 
@@ -92,9 +89,8 @@ def next_fixed_spawn(schedule):
 
     return None
 
-def discord_time(ts):
-    unix = int(ts.timestamp())
-    return f"<t:{unix}:t>", f"<t:{unix}:R>"
+def get_timestamp(dt):
+    return int(dt.timestamp())
 
 # ================= EVENTS =================
 @bot.event
@@ -103,7 +99,7 @@ async def on_ready():
     if not check.is_running():
         check.start()
 
-# ================= COMMANDS =================
+# ================= SETKILL =================
 @bot.command()
 async def setkill(ctx, boss: str, time_str: str = None):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
@@ -124,7 +120,7 @@ async def setkill(ctx, boss: str, time_str: str = None):
     else:
         kill_time = now
 
-    # NORMAL BOSSES
+    # NORMAL
     if boss in BOSS_RESPAWN:
         respawn = kill_time + timedelta(hours=BOSS_RESPAWN[boss])
 
@@ -138,13 +134,12 @@ async def setkill(ctx, boss: str, time_str: str = None):
 
         save_data(ctx.guild.id, ctx.channel.id, data)
         return await ctx.send(
-            f"🩸 **{boss.upper()}** respawn `{respawn.strftime('%I:%M %p')}`"
+            f"🩸 **{boss.upper()}** respawn <t:{get_timestamp(respawn)}:t>"
         )
 
-    # FIXED BOSSES
+    # FIXED
     if boss in FIXED_SCHEDULE:
         nxt = next_fixed_spawn(FIXED_SCHEDULE[boss])
-
         if not nxt:
             return await ctx.send("❌ Could not determine next spawn.")
 
@@ -159,12 +154,12 @@ async def setkill(ctx, boss: str, time_str: str = None):
 
         save_data(ctx.guild.id, ctx.channel.id, data)
         return await ctx.send(
-            f"📅 **{boss.upper()}** next `{nxt.strftime('%A %I:%M %p')}`"
+            f"📅 **{boss.upper()}** next <t:{get_timestamp(nxt)}:t>"
         )
 
     await ctx.send("❌ Unknown boss")
 
-# ================= SCHEDULE TODAY/TOMORROW =================
+# ================= SCHEDULE (TODAY/TOMORROW) =================
 @bot.command()
 async def schedule(ctx):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
@@ -173,44 +168,38 @@ async def schedule(ctx):
     data = load_data(ctx.guild.id, ctx.channel.id)
     now = datetime.now(PH_TZ)
 
-    events = []
-
-    for b, i in data.items():
-        try:
-            key = "respawn" if i["type"] == "normal" else "next"
-            t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
-            events.append((t, b))
-        except:
-            continue
-
-    if not events:
-        return await ctx.send("⚠️ Walay record. Use `!setkill` first.")
-
-    events.sort(key=lambda x: x[0])
+    embed = discord.Embed(
+        title="📅 Boss Schedule",
+        color=discord.Color.blurple()
+    )
 
     today = now.date()
     tomorrow = today + timedelta(days=1)
 
-    msg = "**📅 BOSS SCHEDULE**\n\n"
-
-    def section(day, label):
-        output = f"**{label}**\n"
-        found = False
-
-        for t, b in events:
+    def get_events_for(day):
+        lines = []
+        for b, i in data.items():
+            key = "respawn" if i["type"] == "normal" else "next"
+            t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
             if t.date() == day:
-                ts = int(t.timestamp())
-                output += f"📌 <t:{ts}:t> | **{b.upper()}**\n"
-                found = True
+                lines.append(f"📌 <t:{get_timestamp(t)}:t> | **{b.upper()}**")
+        return "\n".join(sorted(lines))
 
-        return output + "\n" if found else ""
+    today_events = get_events_for(today)
+    tomorrow_events = get_events_for(tomorrow)
 
-    msg += section(today, "TODAY")
-    msg += section(tomorrow, "TOMORROW")
+    if today_events:
+        embed.add_field(name="TODAY", value=today_events, inline=False)
 
-    await ctx.send(msg)
+    if tomorrow_events:
+        embed.add_field(name="TOMORROW", value=tomorrow_events, inline=False)
 
-# ================= WEEKLY VIEW =================
+    if not embed.fields:
+        return await ctx.send("⚠️ Walay record.")
+
+    await ctx.send(embed=embed)
+
+# ================= WEEK (ROLLING 7 DAYS) =================
 @bot.command()
 async def week(ctx):
     if ctx.channel.id not in COMMAND_CHANNEL_IDS:
@@ -219,46 +208,34 @@ async def week(ctx):
     data = load_data(ctx.guild.id, ctx.channel.id)
     now = datetime.now(PH_TZ)
 
-    events = []
-    for b, i in data.items():
-        try:
-            if i["type"] == "normal":
-                t = PH_TZ.localize(datetime.strptime(i["respawn"], "%Y-%m-%d %H:%M:%S"))
-            else:
-                t = PH_TZ.localize(datetime.strptime(i["next"], "%Y-%m-%d %H:%M:%S"))
+    embed = discord.Embed(
+        title="📅 Boss Schedule (Next 7 Days)",
+        color=discord.Color.green()
+    )
 
-            # Only future spawns
-            if t >= now:
-                events.append((t, b))
-        except:
-            continue
+    for i in range(7):
+        day = (now + timedelta(days=i)).date()
+        lines = []
 
-    if not events:
+        for b, info in data.items():
+            key = "respawn" if info["type"] == "normal" else "next"
+            t = PH_TZ.localize(datetime.strptime(info[key], "%Y-%m-%d %H:%M:%S"))
+
+            if t.date() == day and t >= now:
+                lines.append(f"📌 <t:{get_timestamp(t)}:t> | **{b.upper()}**")
+
+        if lines:
+            embed.add_field(
+                name=day.strftime("%A").upper(),
+                value="\n".join(sorted(lines)),
+                inline=False
+            )
+
+    if not embed.fields:
         return await ctx.send("⚠️ Walay upcoming spawns.")
 
-    events.sort(key=lambda x: x[0])
+    await ctx.send(embed=embed)
 
-    msg = "**📅 BOSS SCHEDULE (Next 7 Days)**\n\n"
-
-    # 🔥 Rolling 7 Days from today
-    days = [(now + timedelta(days=i)).date() for i in range(7)]
-
-    for day in days:
-        label = day.strftime("%A").upper()
-        found = False
-
-        section = f"**{label}**\n"
-
-        for t, b in events:
-            if t.date() == day:
-                ts = int(t.timestamp())
-                section += f"📌 <t:{ts}:t> | **{b.upper()}**\n"
-                found = True
-
-        if found:
-            msg += section + "\n"
-
-    await ctx.send(msg)
 # ================= AUTO CHECK =================
 @tasks.loop(seconds=10)
 async def check():
@@ -273,21 +250,17 @@ async def check():
             data = load_data(g.id, c.id)
             changed = False
 
-            for b, i in list(data.items()):
-                try:
-                    key = "respawn" if i["type"] == "normal" else "next"
-                    t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
-                except:
-                    continue
+            for b, i in data.items():
+                key = "respawn" if i["type"] == "normal" else "next"
+                t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
 
                 sec = (t - now).total_seconds()
 
                 # 10 MIN WARNING
                 if 570 <= sec <= 630 and not i["warn"]:
-                    ts_full, ts_rel = discord_time(t)
                     await c.send(
-                        f"⏰ @here **{b.upper()}** will spawn in **10 minutes!**\n"
-                        f"Spawn Time: {ts_full} (**{ts_rel}**)"
+                        f"⏰ @here **{b.upper()}** will spawn in 10 minutes!\n"
+                        f"Spawn Time: <t:{get_timestamp(t)}:t>"
                     )
                     i["warn"] = True
                     changed = True
@@ -296,12 +269,11 @@ async def check():
                     i["warn"] = False
 
                 # SPAWN
-                if sec <= 0 and not i["announce"] and not i.get("locked", False):
+                if sec <= 0 and not i["announce"]:
                     if sec >= -120:
                         await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
 
                     i["announce"] = True
-                    i["locked"] = True
                     changed = True
 
                     if i["type"] == "fixed":
@@ -310,19 +282,9 @@ async def check():
                             i["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
                             i["warn"] = False
                             i["announce"] = False
-                            i["locked"] = False
-
-                # unlock safeguard
-                if i.get("locked") and sec < -3600:
-                    i["locked"] = False
-                    changed = True
 
             if changed:
                 save_data(g.id, c.id, data)
 
 # ================= RUN =================
 bot.run(TOKEN)
-
-
-
-
