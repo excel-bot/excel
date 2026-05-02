@@ -1,12 +1,9 @@
 import discord
 from discord.ext import commands, tasks
-import json, os
+import sqlite3, json, os
 from datetime import datetime, timedelta, time
 import pytz
 from dotenv import load_dotenv
-from keep_alive import keep_alive
-
-keep_alive()
 
 # ================= CONFIG =================
 load_dotenv()
@@ -17,68 +14,45 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 PH_TZ = pytz.timezone("Asia/Manila")
-DATA_FOLDER = "data"
 
-if not os.path.exists(DATA_FOLDER):
-    os.makedirs(DATA_FOLDER)
+# ✅ ADMIN ONLY (replace with your Discord ID)
+ADMIN_IDS = [703982684191326269]
 
-# ================= NORMAL BOSSES =================
-BOSS_RESPAWN = {
-    "venatus": 10, "viorent": 10, "ego": 21, "livera": 24,
-    "araneo": 24, "undomiel": 24, "ladydalia": 18,
-    "general": 29, "amentis": 29, "baron": 32,
-    "wannitas": 48, "metus": 48, "duplican": 48,
-    "shuliar": 35, "gareth": 32, "titore": 37,
-    "larba": 35, "catena": 35,
-    "secreta": 62, "ordo": 62, "asta": 62, "supore": 62
-}
+# ================= SQLITE =================
+conn = sqlite3.connect("boss.db")
+cursor = conn.cursor()
 
-# ================= FIXED BOSSES =================
-FIXED_SCHEDULE = {
-    "clemantis": {"monday": "11:30", "thursday": "19:00"},
-    "saphirus": {"sunday": "17:00", "tuesday": "11:30"},
-    "neutro": {"tuesday": "19:00", "thursday": "11:30"},
-    "thymele": {"monday": "19:00", "wednesday": "11:30"},
-    "milavy": {"saturday": "15:00"},
-    "ringor": {"saturday": "17:00"},
-    "roderick": {"friday": "19:00"},
-    "auraq": {"friday": "22:00", "wednesday": "21:00"},
-    "chaiflock": {"saturday": "22:00"},
-    "benji": {"sunday": "21:00"},
-    "tumier": {"sunday": "19:00"}
-}
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS bosses (
+    guild_id INTEGER,
+    channel_id INTEGER,
+    name TEXT,
+    data TEXT,
+    PRIMARY KEY (guild_id, channel_id, name)
+)
+""")
+conn.commit()
 
-COMMAND_CHANNEL_IDS = [
-    1429295248592601108,
-    1434140498314006548,
-    1453753393217667196
-]
+def save_boss(gid, cid, name, data):
+    cursor.execute("REPLACE INTO bosses VALUES (?, ?, ?, ?)",
+                   (gid, cid, name, json.dumps(data)))
+    conn.commit()
 
-# ================= STORAGE =================
-def file_path(gid, cid):
-    return f"{DATA_FOLDER}/boss_data_{gid}_{cid}.json"
+def load_bosses(gid, cid):
+    cursor.execute("SELECT name, data FROM bosses WHERE guild_id=? AND channel_id=?",
+                   (gid, cid))
+    return {n: json.loads(d) for n, d in cursor.fetchall()}
 
-def load_data(guild_id, channel_id):
-    f = file_path(guild_id, channel_id)
-    if not os.path.exists(f):
-        return {}
-    try:
-        with open(f, "r") as x:
-            t = x.read().strip()
-            return json.loads(t) if t else {}
-    except:
-        return {}
+def delete_boss(gid, cid, name):
+    cursor.execute("DELETE FROM bosses WHERE guild_id=? AND channel_id=? AND name=?",
+                   (gid, cid, name))
+    conn.commit()
 
-def save_data(guild_id, channel_id, data):
-    f = file_path(guild_id, channel_id)
-    with open(f, "w") as x:
-        json.dump(data, x, indent=4)
-
-# ================= TIME HELPERS =================
+# ================= TIME =================
 def next_fixed_spawn(schedule):
     now = datetime.now(PH_TZ)
 
-    for i in range(8):  # 8-day safety window
+    for i in range(8):  # fix weekly bug
         day = now + timedelta(days=i)
         d = day.strftime("%A").lower()
 
@@ -88,142 +62,162 @@ def next_fixed_spawn(schedule):
 
             if dt > now:
                 return dt
-
     return None
+
+# ================= EMBED =================
+def make_embed(title, desc, color=0x00ffcc):
+    return discord.Embed(title=title, description=desc, color=color)
 
 # ================= EVENTS =================
 @bot.event
 async def on_ready():
-    print("✅ Bot running")
+    print(f"✅ Logged in as {bot.user}")
     if not check.is_running():
         check.start()
 
-# ================= SETKILL =================
+# ================= ADMIN COMMANDS =================
 @bot.command()
-async def setkill(ctx, boss: str, time_str: str = None):
-    if ctx.channel.id not in COMMAND_CHANNEL_IDS:
+async def addboss(ctx, name: str, btype: str, *args):
+    if ctx.author.id not in ADMIN_IDS:
         return
 
-    boss = boss.lower()
-    data = load_data(ctx.guild.id, ctx.channel.id)
+    name = name.lower()
+    btype = btype.lower()
+
+    data = load_bosses(ctx.guild.id, ctx.channel.id)
+
+    if btype == "normal":
+        hours = int(args[0])
+        data[name] = {
+            "type": "normal",
+            "respawn_hours": hours,
+            "respawn": "",
+            "warn": False,
+            "announce": False,
+            "locked": False
+        }
+
+    elif btype == "fixed":
+        # example: monday=11:30 thursday=19:00
+        schedule = {}
+        for pair in args:
+            d, t = pair.split("=")
+            schedule[d.lower()] = t
+
+        data[name] = {
+            "type": "fixed",
+            "days": schedule,
+            "next": "",
+            "warn": False,
+            "announce": False,
+            "locked": False
+        }
+
+    else:
+        return await ctx.send("❌ Type must be normal/fixed")
+
+    save_boss(ctx.guild.id, ctx.channel.id, name, data[name])
+
+    await ctx.send(embed=make_embed("✅ Boss Added", f"**{name.upper()}** added."))
+
+@bot.command()
+async def removeboss(ctx, name: str):
+    if ctx.author.id not in ADMIN_IDS:
+        return
+
+    delete_boss(ctx.guild.id, ctx.channel.id, name.lower())
+    await ctx.send(embed=make_embed("🗑 Removed", f"{name.upper()} deleted"))
+
+# ================= SETKILL =================
+@bot.command()
+async def setkill(ctx, name: str, time_str: str = None):
+    data = load_bosses(ctx.guild.id, ctx.channel.id)
+
+    name = name.lower()
+    if name not in data:
+        return await ctx.send("❌ Boss not found")
+
     now = datetime.now(PH_TZ)
 
     if time_str:
-        try:
-            hh, mm = map(int, time_str.split(":"))
-            kill_time = PH_TZ.localize(datetime.combine(now.date(), time(hh, mm)))
-            if kill_time > now:
-                kill_time -= timedelta(days=1)
-        except:
-            return await ctx.send("❌ Format: `!setkill boss HH:MM`")
+        hh, mm = map(int, time_str.split(":"))
+        kill = PH_TZ.localize(datetime.combine(now.date(), time(hh, mm)))
+        if kill > now:
+            kill -= timedelta(days=1)
     else:
-        kill_time = now
+        kill = now
 
-    # NORMAL
-    if boss in BOSS_RESPAWN:
-        respawn = kill_time + timedelta(hours=BOSS_RESPAWN[boss])
-        data[boss] = {
-            "type": "normal",
-            "respawn": respawn.strftime("%Y-%m-%d %H:%M:%S"),
-            "warn": False,
-            "announce": False,
-            "locked": False
-        }
-        save_data(ctx.guild.id, ctx.channel.id, data)
+    boss = data[name]
 
-        embed = discord.Embed(
-            title=f"🩸 {boss.upper()} Scheduled",
-            description=f"Respawn at **{respawn.strftime('%A %I:%M %p')}**",
-            color=discord.Color.red()
-        )
-        return await ctx.send(embed=embed)
+    if boss["type"] == "normal":
+        respawn = kill + timedelta(hours=boss["respawn_hours"])
+        boss["respawn"] = respawn.strftime("%Y-%m-%d %H:%M:%S")
 
-    # FIXED
-    if boss in FIXED_SCHEDULE:
-        nxt = next_fixed_spawn(FIXED_SCHEDULE[boss])
+    else:
+        nxt = next_fixed_spawn(boss["days"])
         if not nxt:
-            return await ctx.send("❌ Could not determine next spawn.")
+            return await ctx.send("❌ No next spawn")
+        boss["next"] = nxt.strftime("%Y-%m-%d %H:%M:%S")
 
-        data[boss] = {
-            "type": "fixed",
-            "next": nxt.strftime("%Y-%m-%d %H:%M:%S"),
-            "days": FIXED_SCHEDULE[boss],
-            "warn": False,
-            "announce": False,
-            "locked": False
-        }
+    boss["warn"] = False
+    boss["announce"] = False
+    boss["locked"] = False
 
-        save_data(ctx.guild.id, ctx.channel.id, data)
+    save_boss(ctx.guild.id, ctx.channel.id, name, boss)
 
-        embed = discord.Embed(
-            title=f"📅 {boss.upper()} Scheduled",
-            description=f"Next spawn: **{nxt.strftime('%A %I:%M %p')}**",
-            color=discord.Color.blue()
-        )
-        return await ctx.send(embed=embed)
-
-    await ctx.send("❌ Unknown boss.")
+    await ctx.send(embed=make_embed("🩸 Set Kill", f"{name.upper()} updated"))
 
 # ================= SCHEDULE =================
 @bot.command()
 async def schedule(ctx):
-    if ctx.channel.id not in COMMAND_CHANNEL_IDS:
-        return
-
-    data = load_data(ctx.guild.id, ctx.channel.id)
+    data = load_bosses(ctx.guild.id, ctx.channel.id)
     now = datetime.now(PH_TZ)
 
     events = []
+
     for b, i in data.items():
         try:
             key = "respawn" if i["type"] == "normal" else "next"
+            if not i.get(key):
+                continue
             t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
             events.append((t, b))
         except:
             continue
 
     if not events:
-        return await ctx.send("⚠️ No records yet.")
+        return await ctx.send("⚠️ No data")
 
-    events.sort(key=lambda x: x[0])
-
-    embed = discord.Embed(
-        title="📅 Boss Schedule (Today & Tomorrow)",
-        color=discord.Color.gold()
-    )
+    events.sort()
 
     today = now.date()
     tomorrow = today + timedelta(days=1)
 
+    desc = ""
+
     for label, day in [("TODAY", today), ("TOMORROW", tomorrow)]:
-        lines = []
+        section = f"**{label}**\n"
         for t, b in events:
             if t.date() == day:
                 ts = int(t.timestamp())
-                lines.append(f"📌 <t:{ts}:t> — **{b.upper()}**")
+                section += f"📌 <t:{ts}:t> | **{b.upper()}**\n"
+        desc += section + "\n"
 
-        if lines:
-            embed.add_field(
-                name=label,
-                value="\n".join(lines),
-                inline=False
-            )
-
-    await ctx.send(embed=embed)
+    await ctx.send(embed=make_embed("📅 Schedule", desc))
 
 # ================= WEEK =================
 @bot.command()
 async def week(ctx):
-    if ctx.channel.id not in COMMAND_CHANNEL_IDS:
-        return
-
-    data = load_data(ctx.guild.id, ctx.channel.id)
+    data = load_bosses(ctx.guild.id, ctx.channel.id)
     now = datetime.now(PH_TZ)
 
     events = []
+
     for b, i in data.items():
         try:
             key = "respawn" if i["type"] == "normal" else "next"
+            if not i.get(key):
+                continue
             t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
             if t >= now:
                 events.append((t, b))
@@ -231,33 +225,25 @@ async def week(ctx):
             continue
 
     if not events:
-        return await ctx.send("⚠️ No upcoming spawns.")
+        return await ctx.send("⚠️ No upcoming")
 
-    events.sort(key=lambda x: x[0])
+    events.sort()
 
-    embed = discord.Embed(
-        title="📅 Boss Schedule (Next 7 Days)",
-        color=discord.Color.green()
-    )
-
+    desc = ""
     for i in range(7):
         day = (now + timedelta(days=i)).date()
         label = day.strftime("%A").upper()
-        lines = []
 
+        section = f"**{label}**\n"
         for t, b in events:
             if t.date() == day:
                 ts = int(t.timestamp())
-                lines.append(f"📌 <t:{ts}:t> — **{b.upper()}**")
+                section += f"📌 <t:{ts}:t> | **{b.upper()}**\n"
 
-        if lines:
-            embed.add_field(
-                name=label,
-                value="\n".join(lines),
-                inline=False
-            )
+        if section.strip() != f"**{label}**":
+            desc += section + "\n"
 
-    await ctx.send(embed=embed)
+    await ctx.send(embed=make_embed("📅 Weekly Schedule", desc))
 
 # ================= AUTO CHECK =================
 @tasks.loop(seconds=10)
@@ -266,36 +252,36 @@ async def check():
 
     for g in bot.guilds:
         for c in g.text_channels:
-            if c.id not in COMMAND_CHANNEL_IDS:
+
+            data = load_bosses(g.id, c.id)
+            if not data:
                 continue
 
-            data = load_data(g.id, c.id)
             changed = False
 
-            for b, i in list(data.items()):
+            for b, i in data.items():
                 try:
                     key = "respawn" if i["type"] == "normal" else "next"
+                    if not i.get(key):
+                        continue
+
                     t = PH_TZ.localize(datetime.strptime(i[key], "%Y-%m-%d %H:%M:%S"))
                 except:
                     continue
 
                 sec = (t - now).total_seconds()
 
-                # 10 MIN WARNING
+                # 10 min warning
                 if 570 <= sec <= 630 and not i["warn"]:
-                    ts = int(t.timestamp())
-                    await c.send(
-                        f"⏰ @here **{b.upper()}** will spawn in 10 minutes!\n"
-                        f"Spawn Time: <t:{ts}:F>"
-                    )
+                    await c.send(f"⏰ @here **{b.upper()}** in 10 minutes!")
                     i["warn"] = True
                     changed = True
 
                 if sec > 630:
                     i["warn"] = False
 
-                # SPAWN
-                if sec <= 0 and not i["announce"] and not i.get("locked", False):
+                # spawn
+                if sec <= 0 and not i["announce"] and not i["locked"]:
                     if sec >= -120:
                         await c.send(f"⚔️ @here **{b.upper()} SPAWNED!**")
 
@@ -316,7 +302,8 @@ async def check():
                     changed = True
 
             if changed:
-                save_data(g.id, c.id, data)
+                for name, d in data.items():
+                    save_boss(g.id, c.id, name, d)
 
 # ================= RUN =================
 bot.run(TOKEN)
